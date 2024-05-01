@@ -1,8 +1,8 @@
 package com.odom.jobinfo
 
-import SearchValue
+import SearchPref
+import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun JobList() {
+    val context = LocalContext.current
     var jobList by remember { mutableStateOf<List<JobInfo>>(emptyList()) }
 
     val coroutineScope = rememberCoroutineScope()
@@ -91,7 +92,11 @@ fun JobList() {
     LaunchedEffect(Unit) {
 
         val fetchedLists = MainActivity.RetrofitClient.create().getResult(1,100).getJobInfo?.row
-        jobList = fetchedLists!!
+
+        val pref = SearchPref(context)
+        val searchedJobs = MainActivity.RetrofitClient.create().getCustomResult(pref.getEducation(), pref.getStyle(), pref.getLocation(),  pref.getCareer()).getJobInfo?.row!!
+
+        jobList = searchedJobs
     }
 
     Surface(color = MaterialTheme.colorScheme.background) {
@@ -103,7 +108,7 @@ fun JobList() {
                 Button(modifier = Modifier.align(Alignment.CenterVertically),
                     onClick = {
                         coroutineScope.launch {
-                            jobList = customSearch()
+                            jobList = customSearch(context)
                         }
 
                     } ) {
@@ -151,11 +156,10 @@ fun ToolbarSample(name: String) {
 }
 
 
-suspend fun customSearch() :  List<JobInfo> {
+suspend fun customSearch(context :Context) :  List<JobInfo> {
 
-   //val location = SearchValue.getLocation(LocalContext.current)
-
-    val searchedJobs = MainActivity.RetrofitClient.create().getCustomResult(SearchValue.education,SearchValue.style, SearchValue.location, SearchValue.career).getJobInfo?.row!!
+    val pref = SearchPref(context)
+    val searchedJobs = MainActivity.RetrofitClient.create().getCustomResult(pref.getEducation(), pref.getStyle(), pref.getLocation(),  pref.getCareer()).getJobInfo?.row!!
 
     return searchedJobs
 }
@@ -190,15 +194,24 @@ fun ButtonGrid() {
 
 @Composable
 fun LocationButton() {
+    val context = LocalContext.current
+    val searchValue =  remember { SearchPref(context) }
+
     var isDropDownMenuExpanded by remember { mutableStateOf(false) }
-    var locationText by remember { mutableStateOf("근무지 선택") }
+    val items = listOf("강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구",
+                        "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구",
+                        "은평구", "종로구", "중구", "중랑구")
+
+    val getLocation = searchValue.getLocation()
+
+    var locationText by remember { mutableStateOf(getLocation) }
     var selectedLocation = "%20"
 
-    val getLocation = SearchValue.getLocation(LocalContext.current)
-    Log.d("===ttTag" , getLocation)
     if (getLocation != "%20") {
         locationText = getLocation
         selectedLocation = getLocation
+    } else {
+        locationText = "근무지 선택"
     }
 
 
@@ -213,49 +226,28 @@ fun LocationButton() {
         expanded = isDropDownMenuExpanded,
         onDismissRequest = { isDropDownMenuExpanded = false }
     ) {
-        DropdownMenuItem(text = { Text("근무지 선택", fontWeight = FontWeight.Medium) }, onClick = {null})
-        DropdownMenuItem(
-            text = { Text("강남구") },
-            onClick = {locationText = "강남구"
-                      isDropDownMenuExpanded = false
-                selectedLocation = "강남구"
-                SearchValue.location = "강남구"})
-        DropdownMenuItem(
-            text = { Text("강동구") },
-            onClick = {locationText = "강동구"
-                isDropDownMenuExpanded = false
-                selectedLocation = "강동구"
-                SearchValue.location = "강동구"})
-        DropdownMenuItem(
-            text = { Text("강북구") },
-            onClick = {locationText = "강북구"
-                isDropDownMenuExpanded = false
-                selectedLocation = "강북구"
-                SearchValue.location = "강북구"})
-        DropdownMenuItem(
-            text = { Text("강서구") },
-            onClick = {locationText = "강서구"
-                isDropDownMenuExpanded = false
-                selectedLocation = "강서구"
-                SearchValue.location = "강서구"})
-        DropdownMenuItem(
-            text = { Text("관악구") },
-            onClick = {locationText = "관악구"
-                isDropDownMenuExpanded = false
-                selectedLocation = "관악구"
-                SearchValue.location = "관악구"})
+        items.forEachIndexed { index, string ->
+            DropdownMenuItem(
+                text = { Text(items[index]) },
+                onClick = {
+                    locationText = items[index]
+                    isDropDownMenuExpanded = false
+                    selectedLocation = items[index]
+
+                    searchValue.saveLocation(selectedLocation)
+                })
+        }
 
     }
 
-    Log.d("===ttTag2" , selectedLocation)
-    Log.d("===ttTag3" , SearchValue.location)
-
-    SearchValue.saveLocation(LocalContext.current, SearchValue.location)
 }
 
 
 @Composable
 fun JobList(infos : List<JobInfo>) {
+    Text(text = "검색결과 : " + infos.size + "개")
+    Spacer(modifier = Modifier.height(16.dp))
+
     LazyColumn {
         items(infos) { info ->
             ExpandableCardView(info)
