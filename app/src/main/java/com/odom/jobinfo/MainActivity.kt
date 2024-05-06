@@ -7,12 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -51,6 +49,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.odom.jobinfo.ui.theme.JobInfoTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -103,18 +103,7 @@ fun JobList() {
         Column {
             ToolbarSample("서울시 정보만 있습니다")
 
-            Row {
-                ButtonGrid()
-                Button(modifier = Modifier.align(Alignment.CenterVertically),
-                    onClick = {
-                        coroutineScope.launch {
-                            jobList = customSearch(context)
-                        }
-
-                    } ) {
-                    Text(text = "재검색")
-                }
-            }
+            LocationButton()
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -165,37 +154,10 @@ suspend fun customSearch(context :Context) :  List<JobInfo> {
 }
 
 @Composable
-fun ButtonGrid() {
-    Column(modifier = Modifier.wrapContentSize(),
-    ){
-        Row {
-            // 근무지 선택
-            LocationButton()
-
-            Spacer(modifier = Modifier.width(16.dp))
-            Button(onClick = { /* 버튼 2 클릭 처리 */ }) {
-                Text("고용형태")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp)) // 간격 조절
-
-        Row {
-            Button(onClick = { /* 버튼 3 클릭 처리 */ }) {
-                Text("경력조건")
-            }
-            Spacer(modifier = Modifier.width(16.dp)) // 간격 조절
-            Button(onClick = { /* 버튼 4 클릭 처리 */ }) {
-                Text("학력조건")
-            }
-        }
-    }
-}
-
-@Composable
 fun LocationButton() {
     val context = LocalContext.current
     val searchValue =  remember { SearchPref(context) }
+    var jobList by remember { mutableStateOf<List<JobInfo>>(emptyList()) }
 
     var isDropDownMenuExpanded by remember { mutableStateOf(false) }
     val items = listOf("강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구",
@@ -214,11 +176,16 @@ fun LocationButton() {
         locationText = "근무지 선택"
     }
 
+    Column {
+        Button(
+            onClick = { isDropDownMenuExpanded = true }
+        ) {
+            Text(text = locationText)
+        }
 
-    Button(
-        onClick = { isDropDownMenuExpanded = true }
-    ) {
-        Text(text = locationText)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        JobList(jobList)
     }
 
     DropdownMenu(
@@ -235,6 +202,11 @@ fun LocationButton() {
                     selectedLocation = items[index]
 
                     searchValue.saveLocation(selectedLocation)
+
+                    CoroutineScope(Dispatchers.Default).launch {
+                        jobList = customSearch(context)
+                    }
+
                 })
         }
 
@@ -245,7 +217,10 @@ fun LocationButton() {
 
 @Composable
 fun JobList(infos : List<JobInfo>) {
-    Text(text = "검색결과 : " + infos.size + "개")
+    if (infos.isNotEmpty()) {
+        Text(text = "검색결과 : " + infos.size + "개")
+    }
+
     Spacer(modifier = Modifier.height(16.dp))
 
     LazyColumn {
