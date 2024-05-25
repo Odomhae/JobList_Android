@@ -1,11 +1,17 @@
 package com.odom.jobinfo
 
 import SearchPref
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +26,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
@@ -37,23 +44,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.odom.jobinfo.ui.theme.JobInfoTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+
 
 class MainActivity : ComponentActivity() {
 
@@ -73,7 +77,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             JobInfoTheme {
                 setContent {
-                    JobList()
+                    JobContent()
                 }
             }
         }
@@ -83,15 +87,11 @@ class MainActivity : ComponentActivity() {
 
 
 @Composable
-fun JobList() {
+fun JobContent() {
     val context = LocalContext.current
     var jobList by remember { mutableStateOf<List<JobInfo>>(emptyList()) }
 
-    val coroutineScope = rememberCoroutineScope()
-
     LaunchedEffect(Unit) {
-
-        val fetchedLists = MainActivity.RetrofitClient.create().getResult(1,100).getJobInfo?.row
 
         val pref = SearchPref(context)
         val searchedJobs = MainActivity.RetrofitClient.create().getCustomResult(pref.getEducation(), pref.getStyle(), pref.getLocation(),  pref.getCareer()).getJobInfo?.row!!
@@ -101,12 +101,8 @@ fun JobList() {
 
     Surface(color = MaterialTheme.colorScheme.background) {
         Column {
-            ToolbarSample("서울시 정보만 있습니다")
-
+            Toolbar("서울시 정보만 있습니다")
             LocationButton()
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             JobList(jobList)
         }
 
@@ -115,7 +111,7 @@ fun JobList() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ToolbarSample(name: String) {
+fun Toolbar(name: String) {
 
     TopAppBar(
         title = { Text(text = name) },
@@ -144,15 +140,6 @@ fun ToolbarSample(name: String) {
     
 }
 
-
-suspend fun customSearch(context :Context) :  List<JobInfo> {
-
-    val pref = SearchPref(context)
-    val searchedJobs = MainActivity.RetrofitClient.create().getCustomResult(pref.getEducation(), pref.getStyle(), pref.getLocation(),  pref.getCareer()).getJobInfo?.row!!
-
-    return searchedJobs
-}
-
 @Composable
 fun LocationButton() {
     val context = LocalContext.current
@@ -167,7 +154,7 @@ fun LocationButton() {
     val getLocation = searchValue.getLocation()
 
     var locationText by remember { mutableStateOf(getLocation) }
-    var selectedLocation = "%20"
+    var selectedLocation: String
 
     if (getLocation != "%20") {
         locationText = getLocation
@@ -193,7 +180,7 @@ fun LocationButton() {
         expanded = isDropDownMenuExpanded,
         onDismissRequest = { isDropDownMenuExpanded = false }
     ) {
-        items.forEachIndexed { index, string ->
+        items.forEachIndexed { index, _ ->
             DropdownMenuItem(
                 text = { Text(items[index]) },
                 onClick = {
@@ -214,6 +201,14 @@ fun LocationButton() {
 
 }
 
+suspend fun customSearch(context : Context) :  List<JobInfo> {
+
+    val pref = SearchPref(context)
+    val searchedJobs = MainActivity.RetrofitClient.create().getCustomResult(pref.getEducation(), pref.getStyle(), pref.getLocation(), pref.getCareer()).getJobInfo?.row!!
+
+    return searchedJobs
+}
+
 
 @Composable
 fun JobList(infos : List<JobInfo>) {
@@ -231,63 +226,55 @@ fun JobList(infos : List<JobInfo>) {
     }
 }
 
-@Composable
-fun ShortJobItem(job: JobInfo) {
-    Text(text = "기업명칭: ${job.cmpnyNm}")
-    Text(text = "사업요약내용: ${job.bsnsSumryCn}")
-    Text(text = "모집요강: ${job.guiLn}")
+fun shortItem(job: JobInfo) : String {
+    val sb = StringBuilder()
 
-    Text(text = "")
-    Text(text = "근무시간: ${job.workTimeNm}")
-    Text(text = "공휴일: ${job.holidayNm}")
+    sb.append("기업명칭: ${job.cmpnyNm}\n")
+    sb.append("사업요약내용: ${job.bsnsSumryCn}\n")
+    sb.append("모집요강: ${job.guiLn}\n\n")
 
-    Text(text = "")
-    Text(text = "마감일: ${job.rceptClosNm}", fontSize = 15.sp,  fontStyle = FontStyle.Italic)
+    sb.append("근무시간: ${job.workTimeNm}\n")
+    sb.append("공휴일: ${job.holidayNm}\n\n")
+    sb.append("마감일: ${job.rceptClosNm}\n") // fontSize = 15.sp,  fontStyle = FontStyle.Italic)
+
+    return sb.toString()
 }
 
-@Composable
-fun FullJobItem(job: JobInfo) {
-    Text(text = "기업명칭: ${job.cmpnyNm}")
-    Text(text = "사업요약내용: ${job.bsnsSumryCn}")
-    Text(text = "모집인원수: ${job.rcritNmprCo}")
-    Text(text = "학력코드명: ${job.acdmcrNm}")
-    Text(text = "고용형태코드명: ${job.emplymStleCmmnMm}")
-    Text(text = "근무예정지 주소: ${job.workPararBassAdresCn}")
-    Text(text = "직무내용: ${job.dtyCn}",  fontSize = 15.sp, fontWeight = FontWeight.Bold)
+fun longItem(job: JobInfo) : String {
 
-    Text(text = "")
-    Text(text = "경력조건코드명: ${job.careerCndNm}")
-    Text(text = "급여조건: ${job.hopeWage}")
-    //Text(text = "퇴직금구분: ${job.retGrantsNm}")
-    Text(text = "근무시간: ${job.workTimeNm}")
-    Text(text = "근무형태: ${job.workTmNm}")
-    Text(text = "공휴일: ${job.holidayNm}")
-    Text(text = "주당근무시간: ${job.weekWorkHr}")
-    Text(text = "4대보험: ${job.joFeinsrSbscrbNm}")
+    val sb = StringBuilder()
 
-    Text(text = "")
-    Text(text = "마감일: ${job.rceptClosNm}", fontSize = 15.sp,  fontStyle = FontStyle.Italic)
-    Text(text = "제출서류: ${job.presentnPapersNm}")
+    sb.append("기업명칭: ${job.cmpnyNm}\n")
+    sb.append("사업요약내용: ${job.bsnsSumryCn}\n")
+    sb.append("모집요강: ${job.guiLn}\n\n")
 
-    Text(text = "")
-    Text(text = "담당 상담사명: ${job.mngrNm}")
-    Text(text = "담당 상담사 전화번호: ${job.mngrPhonNo}")
-    Text(text = "담당 상담사 소속기관명: ${job.mngrInsttNm}")
+    sb.append("근무시간: ${job.workTimeNm}\n")
+    sb.append("공휴일: ${job.holidayNm}\n\n")
+    sb.append("마감일: ${job.rceptClosNm}\n") // fontSize = 15.sp,  fontStyle = FontStyle.Italic)
 
-    Text(text = "")
-    Text(text = "기업 주소: ${job.bassAdresCn}")
-    Text(text = "구인제목: ${job.joSj}")
-    Text(text = "등록일: ${job.joRegDt}")
-    Text(text = "모집요강: ${job.guiLn}")
+    sb.append("구인제목: ${job.joSj}\n")
+    sb.append("근무예정지: ${job.workPararBassAdresCn}\n")
+    sb.append("직무내용: ${job.dtyCn}\n\n") //  fontSize = 15.sp, fontWeight = FontWeight.Bold)
 
-    Text(text = "구인신청번호: ${job.joReqstNo}")
-    Text(text = "구인등록번호: ${job.joRegistNo}")
+    sb.append("급여조건: ${job.hopeWage}\n")
 
+    sb.append("담당 상담사명: ${job.mngrNm}\n")
+    sb.append("담당 상담사 전화번호: ${job.mngrPhonNo}\n")
+    sb.append("담당 상담사 소속기관명: ${job.mngrInsttNm}\n\n")
+
+    sb.append("기업 주소: ${job.bassAdresCn}\n")
+
+    sb.append("구인신청번호: ${job.joReqstNo}\n")
+    sb.append("구인등록번호: ${job.joRegistNo}\n")
+
+    return  sb.toString()
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ExpandableCardView(job: JobInfo) {
     var isExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier
@@ -300,11 +287,21 @@ fun ExpandableCardView(job: JobInfo) {
             modifier = Modifier
                 .padding(16.dp)
                 .clickable { isExpanded = !isExpanded }
+                .combinedClickable(
+                    interactionSource = remember {
+                        MutableInteractionSource()
+                    },
+                    indication = rememberRipple(bounded = true),
+                    onClick = { isExpanded = !isExpanded },
+                    onLongClick = {
+                        copyToClipboard(context, isExpanded, job)
+                    }
+                )
         ) {
            // Text("Title", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             if (isExpanded) {
-                FullJobItem(job)
+                Text(text = longItem(job))
                 Spacer(modifier = Modifier.height(8.dp))
                 IconButton(
                     onClick = { isExpanded = false },
@@ -316,7 +313,7 @@ fun ExpandableCardView(job: JobInfo) {
                     )
                 }
             } else {
-                ShortJobItem(job = job)
+                Text(text = shortItem(job))
                 Spacer(modifier = Modifier.height(8.dp))
                 IconButton(
                     onClick = { isExpanded = true },
@@ -330,5 +327,14 @@ fun ExpandableCardView(job: JobInfo) {
             }
         }
     }
+}
+
+private fun copyToClipboard(context: Context, isExpaned : Boolean, job: JobInfo) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val copyText = if (isExpaned) longItem(job) else shortItem(job)
+    val clip = ClipData.newPlainText("Copied Text", copyText)
+    clipboard.setPrimaryClip(clip)
+
+    Toast.makeText(context, "글자가 복사되었습니다", Toast.LENGTH_SHORT).show()
 }
 
