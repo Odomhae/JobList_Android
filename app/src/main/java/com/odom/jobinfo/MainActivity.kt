@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,8 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,13 +35,13 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,8 +50,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import com.odom.jobinfo.ui.theme.JobInfoTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,7 +98,7 @@ class MainActivity : ComponentActivity() {
 fun JobContent() {
     val context = LocalContext.current
     var jobList by remember { mutableStateOf<List<JobInfo>>(emptyList()) }
-
+    val systemUiController = rememberSystemUiController()
     var backPressedTime by remember { mutableStateOf(0L) }
 
     BackHandler {
@@ -104,6 +111,12 @@ fun JobContent() {
         }
     }
 
+    SideEffect {
+        systemUiController.setSystemBarsColor(
+            color = Color.Black, // 원하는 색상으로 변경
+        )
+    }
+
     LaunchedEffect(Unit) {
 
         val pref = SearchPref(context)
@@ -114,7 +127,7 @@ fun JobContent() {
 
     Surface(color = MaterialTheme.colorScheme.background) {
         Column {
-            Toolbar("서울시 정보만 있습니다")
+            Toolbar("글자를 길게 누르면 복사가 됩니다")
             LocationButton()
             JobList(jobList)
         }
@@ -126,29 +139,31 @@ fun JobContent() {
 @Composable
 fun Toolbar(name: String) {
 
+    val context = LocalContext.current
+
     TopAppBar(
-        title = { Text(text = name) },
+        title = { Text(text = name, modifier = Modifier.background(color = Color.Yellow)) },
      //   contentColor = MaterialTheme.colorScheme.primary,
      //   backgroundColor = Color.Yellow,
 
-        navigationIcon = {
-            IconButton(onClick = { /*TODO*/ }) {
-                Icon(
-                    imageVector = Icons.Filled.Menu,
-                    contentDescription = "Menu"
-                )
-            }
-        },
-   //     elevation = 12.dp,
-        actions = {
-            IconButton(onClick = { /*TODO*/ }) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "MoreVert",
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
+//        navigationIcon = {
+//            IconButton(onClick = { /*TODO*/ }) {
+//                Icon(
+//                    imageVector = Icons.Filled.Menu,
+//                    contentDescription = "Menu"
+//                )
+//            }
+//        },
+//   //     elevation = 12.dp,
+//        actions = {
+//            IconButton(onClick = {  Toast.makeText(context, "업데이트 중입니다.", Toast.LENGTH_SHORT).show()}) {
+//                Icon(
+//                    imageVector = Icons.Filled.Menu,
+//                    contentDescription = "MoreVert",
+//                    tint = MaterialTheme.colorScheme.primary,
+//                )
+//            }
+//        }
     )
     
 }
@@ -178,38 +193,41 @@ fun LocationButton() {
 
     Column {
         Button(
+            modifier = Modifier.padding(start = 16.dp),
             onClick = { isDropDownMenuExpanded = true }
         ) {
             Text(text = locationText)
         }
 
+        DropdownMenu(
+            modifier = Modifier
+                .wrapContentSize()
+                .offset(x = 16.dp, y = 8.dp), // 위치 조절,
+            expanded = isDropDownMenuExpanded,
+            onDismissRequest = { isDropDownMenuExpanded = false }
+        ) {
+            items.forEachIndexed { index, _ ->
+                DropdownMenuItem(
+                    text = { Text(items[index]) },
+                    onClick = {
+                        locationText = items[index]
+                        isDropDownMenuExpanded = false
+                        selectedLocation = items[index]
+
+                        searchValue.saveLocation(selectedLocation)
+
+                        CoroutineScope(Dispatchers.Default).launch {
+                            jobList = customSearch(context)
+                        }
+
+                    })
+            }
+
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         JobList(jobList)
-    }
-
-    DropdownMenu(
-        modifier = Modifier.wrapContentSize(),
-        expanded = isDropDownMenuExpanded,
-        onDismissRequest = { isDropDownMenuExpanded = false }
-    ) {
-        items.forEachIndexed { index, _ ->
-            DropdownMenuItem(
-                text = { Text(items[index]) },
-                onClick = {
-                    locationText = items[index]
-                    isDropDownMenuExpanded = false
-                    selectedLocation = items[index]
-
-                    searchValue.saveLocation(selectedLocation)
-
-                    CoroutineScope(Dispatchers.Default).launch {
-                        jobList = customSearch(context)
-                    }
-
-                })
-        }
-
     }
 
 }
@@ -226,10 +244,14 @@ suspend fun customSearch(context : Context) :  List<JobInfo> {
 @Composable
 fun JobList(infos : List<JobInfo>) {
     if (infos.isNotEmpty()) {
-        Text(text = "검색결과 : " + infos.size + "개")
+        Text(text = "검색결과 : " + infos.size + "개",
+            modifier = Modifier.padding(16.dp, 0.dp, 0.dp, 10.dp),
+            style = TextStyle(
+                fontSize = 20.sp, // 글자 크기
+                fontWeight = FontWeight.Bold // 글자 굵기
+            )
+        )
     }
-
-    Spacer(modifier = Modifier.height(16.dp))
 
     LazyColumn {
         items(infos) { info ->
@@ -239,7 +261,7 @@ fun JobList(infos : List<JobInfo>) {
     }
 }
 
-fun shortItem(job: JobInfo) : String {
+fun shortItemText(job: JobInfo) : String {
     val sb = StringBuilder()
 
     sb.append("기업명칭: ${job.cmpnyNm}\n")
@@ -248,12 +270,87 @@ fun shortItem(job: JobInfo) : String {
 
     sb.append("근무시간: ${job.workTimeNm}\n")
     sb.append("공휴일: ${job.holidayNm}\n\n")
-    sb.append("마감일: ${job.rceptClosNm}\n") // fontSize = 15.sp,  fontStyle = FontStyle.Italic)
+    sb.append("마감일: ${job.rceptClosNm}\n")
 
     return sb.toString()
 }
 
-fun longItem(job: JobInfo) : String {
+@Composable
+fun ShortItem(job: JobInfo) {
+    val text = buildAnnotatedString {
+        append("기업명칭: ${job.cmpnyNm}\n")
+        withStyle(style = SpanStyle(fontWeight = FontWeight.ExtraBold)) {
+            append("사업요약: ${job.bsnsSumryCn}\n")
+        }
+
+        append("모집요강: ${job.guiLn}\n\n")
+
+        withStyle(style = SpanStyle(fontWeight = FontWeight.ExtraBold)) {
+            append("근무시간: ${job.workTimeNm}\n")
+        }
+        append("공휴일: ${job.holidayNm}\n\n")
+
+        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+            append("마감일: ${job.rceptClosNm}")
+        }
+    }
+
+    Text(
+        text = text,
+        //modifier = Modifier.padding(16.dp, 0.dp, 0.dp, 0.dp),
+        style = TextStyle(fontSize = 15.sp) // 기본 스타일
+    )
+}
+
+@Composable
+fun LongItem(job: JobInfo) {
+    val text = buildAnnotatedString {
+        append("기업명칭: ${job.cmpnyNm}\n")
+        withStyle(style = SpanStyle(fontWeight = FontWeight.ExtraBold)) {
+            append("사업요약: ${job.bsnsSumryCn}\n")
+        }
+
+        append("모집요강: ${job.guiLn}\n\n")
+
+        withStyle(style = SpanStyle(fontWeight = FontWeight.ExtraBold)) {
+            append("근무시간: ${job.workTimeNm}\n")
+        }
+        append("공휴일: ${job.holidayNm}\n\n")
+
+        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+            append("마감일: ${job.rceptClosNm}\n\n")
+        }
+
+        //
+
+        append("구인제목: ${job.joSj}\n")
+        append("근무예정지: ${job.workPararBassAdresCn}\n")
+        withStyle(style = SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold)) {
+            append("직무내용: ${job.dtyCn}\n\n")
+        }
+
+        append("급여조건: ${job.hopeWage}\n\n")
+
+        withStyle(style = SpanStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold)) {
+            append("담당 상담사명: ${job.mngrNm}\n")
+            append("담당 상담사 전화번호: ${job.mngrPhonNo}\n")
+            append("담당 상담사 소속기관명: ${job.mngrInsttNm}\n\n")
+        }
+
+        append("기업 주소: ${job.bassAdresCn}\n")
+
+        append("구인신청번호: ${job.joReqstNo}\n")
+        append("구인등록번호: ${job.joRegistNo}\n")
+    }
+
+    Text(
+        text = text,
+        //modifier = Modifier.padding(16.dp, 0.dp, 0.dp, 0.dp),
+        style = TextStyle(fontSize = 15.sp) // 기본 스타일
+    )
+}
+
+fun longItemText(job: JobInfo) : String {
 
     val sb = StringBuilder()
 
@@ -263,11 +360,11 @@ fun longItem(job: JobInfo) : String {
 
     sb.append("근무시간: ${job.workTimeNm}\n")
     sb.append("공휴일: ${job.holidayNm}\n\n")
-    sb.append("마감일: ${job.rceptClosNm}\n") // fontSize = 15.sp,  fontStyle = FontStyle.Italic)
+    sb.append("마감일: ${job.rceptClosNm}\n")
 
     sb.append("구인제목: ${job.joSj}\n")
     sb.append("근무예정지: ${job.workPararBassAdresCn}\n")
-    sb.append("직무내용: ${job.dtyCn}\n\n") //  fontSize = 15.sp, fontWeight = FontWeight.Bold)
+    sb.append("직무내용: ${job.dtyCn}\n\n")
 
     sb.append("급여조건: ${job.hopeWage}\n")
 
@@ -314,24 +411,26 @@ fun ExpandableCardView(job: JobInfo) {
            // Text("Title", style = MaterialTheme.typography.titleSmall)
             Spacer(modifier = Modifier.height(8.dp))
             if (isExpanded) {
-                Text(text = longItem(job))
+                LongItem(job)
                 Spacer(modifier = Modifier.height(8.dp))
-                IconButton(
+                Button(
                     onClick = { isExpanded = false },
                     modifier = Modifier.align(Alignment.End)
                 ) {
+                    Text(text = "접기")
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowUp,
                         contentDescription = "Collapse"
                     )
                 }
             } else {
-                Text(text = shortItem(job))
+                ShortItem(job)
                 Spacer(modifier = Modifier.height(8.dp))
-                IconButton(
+                Button(
                     onClick = { isExpanded = true },
                     modifier = Modifier.align(Alignment.End)
                 ) {
+                    Text(text = "펼치기")
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
                         contentDescription = "Expand"
@@ -344,7 +443,7 @@ fun ExpandableCardView(job: JobInfo) {
 
 private fun copyToClipboard(context: Context, isExpaned : Boolean, job: JobInfo) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    val copyText = if (isExpaned) longItem(job) else shortItem(job)
+    val copyText = if (isExpaned) longItemText(job) else shortItemText(job)
     val clip = ClipData.newPlainText("Copied Text", copyText)
     clipboard.setPrimaryClip(clip)
 
