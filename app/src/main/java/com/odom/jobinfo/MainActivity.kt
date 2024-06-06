@@ -7,6 +7,7 @@ import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -90,6 +91,18 @@ class MainActivity : ComponentActivity() {
 fun JobContent() {
     val context = LocalContext.current
     var jobList by remember { mutableStateOf<List<JobInfo>>(emptyList()) }
+
+    var backPressedTime by remember { mutableStateOf(0L) }
+
+    BackHandler {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime > backPressedTime + 2000) {
+            backPressedTime = currentTime
+            Toast.makeText(context, "'뒤로' 버튼을 한번 더 누르시면 종료됩니다.", Toast.LENGTH_SHORT).show()
+        } else if (currentTime <= backPressedTime + 2000) {
+            (context as? ComponentActivity)?.finish()
+        }
+    }
 
     LaunchedEffect(Unit) {
 
