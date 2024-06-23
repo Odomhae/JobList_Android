@@ -1,4 +1,4 @@
-package com.odom.jobinfo
+package com.odom.seoulJobInfo
 
 import retrofit2.http.GET
 import retrofit2.http.Path

@@ -1,4 +1,4 @@
-package com.odom.jobinfo
+package com.odom.seoulJobInfo
 
 import SearchPref
 import android.content.ClipData
@@ -59,7 +59,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
-import com.odom.jobinfo.ui.theme.JobInfoTheme
+import com.odom.seoulJobInfo.ui.theme.JobInfoTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

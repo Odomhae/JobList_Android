@@ -1,4 +1,4 @@
-package com.odom.jobinfo
+package com.odom.seoulJobInfo
 
 import com.google.gson.annotations.Expose
 import com.google.gson.annotations.SerializedName

@@ -1,4 +1,4 @@
-package com.odom.jobinfo
+package com.odom.seoulJobInfo
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

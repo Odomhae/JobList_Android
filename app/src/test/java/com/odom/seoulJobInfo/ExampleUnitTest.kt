@@ -1,4 +1,4 @@
-package com.odom.jobinfo
+package com.odom.seoulJobInfo
 
 import org.junit.Test
 
