@@ -1,3 +1,14 @@
 <resources>
     <string name="app_name">서울Job_구별 취업 정보</string>
+
+
+    <!-- 테스트용 배너 광고 -->
+    <string name="TEST_Admob_APP_ID"> ca-app-pub-3940256099942544~3347511713</string>
+    <string name="TEST_Admob_BANNER_ID">ca-app-pub-3940256099942544/6300978111</string>
+    <string name="TEST_Admob_FULLSCREEN_ID">ca-app-pub-3940256099942544/1033173712</string>
+
+    <string name="REAL_Admob_APP_ID">ca-app-pub-6729344454320392~5550978994</string>
+    <string name="REAL_Admob_BANNER_ID">ca-app-pub-6729344454320392/2314821071</string>
+    <string name="REAL_Admob_FULLSCREEN_ID">ca-app-pub-6729344454320392/7472768667</string>
+
 </resources>
