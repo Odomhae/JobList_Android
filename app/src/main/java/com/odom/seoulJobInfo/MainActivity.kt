@@ -2,6 +2,7 @@ package com.odom.seoulJobInfo
 
 import FavoritePref
 import SearchPref
+import SettingsPref
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -67,6 +68,18 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Slider
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
@@ -105,6 +118,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+val LocalTextScale = compositionLocalOf { 1.0f }
+
 sealed interface UiState {
     object Loading : UiState
     object Empty : UiState
@@ -135,6 +150,9 @@ fun JobContent() {
     var selectedTab by remember { mutableStateOf(0) }
     var favoriteVersion by remember { mutableStateOf(0) }
     val favoritePref = remember { FavoritePref(context) }
+    val settingsPref = remember { SettingsPref(context) }
+    var textScale by remember { mutableStateOf(settingsPref.getTextScale()) }
+    var showSettings by remember { mutableStateOf(false) }
 
     val exitBannerAdView = remember {
         AdView(context).apply {
@@ -189,9 +207,22 @@ fun JobContent() {
         )
     }
 
+    if (showSettings) {
+        SettingsSheet(
+            textScale = textScale,
+            onTextScaleChange = { value ->
+                textScale = value
+                settingsPref.saveTextScale(value)
+            },
+            onReviewClick = { triggerInAppReview() },
+            onDismiss = { showSettings = false }
+        )
+    }
+
+    CompositionLocalProvider(LocalTextScale provides textScale) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Toolbar()
+            Toolbar(onSettingsClick = { showSettings = true })
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
@@ -288,6 +319,7 @@ fun JobContent() {
             )
         }
     }
+    }
 }
 
 @Composable
@@ -330,15 +362,102 @@ fun ExitDialog(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun SettingsSheet(
+    textScale: Float,
+    onTextScaleChange: (Float) -> Unit,
+    onReviewClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val navBarHeight: Dp = remember {
+        val activity = context as? Activity
+        val insets = activity?.window?.decorView?.let { ViewCompat.getRootWindowInsets(it) }
+        insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom
+            ?.let { with(density) { it.toDp() } } ?: 0.dp
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                )
+        ) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    ),
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Column(modifier = Modifier.padding(24.dp).padding(bottom = navBarHeight)) {
+                    Text(text = "설정", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(text = "글자 크기", style = MaterialTheme.typography.labelLarge)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "A", fontSize = 12.sp)
+                        Slider(
+                            value = textScale,
+                            onValueChange = onTextScaleChange,
+                            valueRange = 0.8f..1.6f,
+                            steps = 3,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
+                        )
+                        Text(text = "A", fontSize = 20.sp)
+                    }
+                    Text(
+                        text = "기업명칭: 미리보기",
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * textScale
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedButton(
+                        onClick = onReviewClick,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(text = "★ 앱 리뷰 남기기")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Toolbar() {
+fun Toolbar(onSettingsClick: () -> Unit) {
     TopAppBar(
         title = { Text(text = "서울 일자리") },
         colors = TopAppBarDefaults.smallTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.primary,
             titleContentColor = MaterialTheme.colorScheme.onPrimary
-        )
+        ),
+        actions = {
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "설정",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
     )
 }
 
@@ -432,8 +551,11 @@ fun JobList(
 
 @Composable
 fun ShortItem(job: JobInfo) {
-    val labelStyle = MaterialTheme.typography.labelLarge.toSpanStyle().copy(fontWeight = FontWeight.SemiBold)
+    val scale = LocalTextScale.current
+    val labelStyle = MaterialTheme.typography.labelLarge.toSpanStyle()
+        .copy(fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.labelLarge.fontSize * scale)
     val valueStyle = MaterialTheme.typography.bodyMedium.toSpanStyle()
+        .copy(fontSize = MaterialTheme.typography.bodyMedium.fontSize * scale)
     val text = buildAnnotatedString {
         fun field(label: String, value: String?, trailing: String = "\n") {
             withStyle(labelStyle) { append("$label: ") }
@@ -451,8 +573,11 @@ fun ShortItem(job: JobInfo) {
 
 @Composable
 fun LongItem(job: JobInfo) {
-    val labelStyle = MaterialTheme.typography.labelLarge.toSpanStyle().copy(fontWeight = FontWeight.SemiBold)
+    val scale = LocalTextScale.current
+    val labelStyle = MaterialTheme.typography.labelLarge.toSpanStyle()
+        .copy(fontWeight = FontWeight.SemiBold, fontSize = MaterialTheme.typography.labelLarge.fontSize * scale)
     val valueStyle = MaterialTheme.typography.bodyMedium.toSpanStyle()
+        .copy(fontSize = MaterialTheme.typography.bodyMedium.fontSize * scale)
     val text = buildAnnotatedString {
         fun field(label: String, value: String?, trailing: String = "\n") {
             withStyle(labelStyle) { append("$label: ") }
