@@ -1,5 +1,6 @@
 package com.odom.seoulJobInfo
 
+import FavoritePref
 import SearchPref
 import android.app.Activity
 import android.content.ClipData
@@ -13,7 +14,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,11 +27,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -41,9 +41,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -72,6 +75,7 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.play.core.review.ReviewManagerFactory
 import com.odom.seoulJobInfo.ui.theme.JobInfoTheme
 import kotlinx.coroutines.launch
 import retrofit2.Retrofit
@@ -128,6 +132,9 @@ fun JobContent() {
     var showExitDialog by remember { mutableStateOf(false) }
     var filterChangeCount by remember { mutableStateOf(0) }
     var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+    var selectedTab by remember { mutableStateOf(0) }
+    var favoriteVersion by remember { mutableStateOf(0) }
+    val favoritePref = remember { FavoritePref(context) }
 
     val exitBannerAdView = remember {
         AdView(context).apply {
@@ -149,6 +156,24 @@ fun JobContent() {
         )
     }
 
+    fun triggerInAppReview() {
+        val activity = context as? Activity ?: return
+        val reviewManager = ReviewManagerFactory.create(context)
+        reviewManager.requestReviewFlow().addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                reviewManager.launchReviewFlow(activity, task.result)
+            }
+        }
+    }
+
+    fun onFavoriteChanged(added: Boolean) {
+        favoriteVersion++
+        if (added) {
+            val count = favoritePref.incrementAndGetAddCount()
+            if (count == 3) triggerInAppReview()
+        }
+    }
+
     LaunchedEffect(Unit) {
         uiState = loadJobs(context)
         loadInterstitial()
@@ -167,50 +192,90 @@ fun JobContent() {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
             Toolbar()
-            Text(
-                text = "글자를 길게 누르면 복사가 됩니다",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
-            )
-            FilterRow(
-                onFilterChanged = {
-                    uiState = UiState.Loading
-                    filterChangeCount++
-                    if (filterChangeCount % 3 == 0) {
-                        val activity = context as? Activity
-                        val ad = interstitialAd
-                        if (activity != null && ad != null) {
-                            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                                override fun onAdDismissedFullScreenContent() {
-                                    interstitialAd = null
-                                    loadInterstitial()
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { Text("전체") }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { Text("★ 즐겨찾기") }
+                )
+            }
+
+            if (selectedTab == 0) {
+                Text(
+                    text = "글자를 길게 누르면 복사가 됩니다",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                )
+                FilterRow(
+                    onFilterChanged = {
+                        uiState = UiState.Loading
+                        filterChangeCount++
+                        if (filterChangeCount % 3 == 0) {
+                            val activity = context as? Activity
+                            val ad = interstitialAd
+                            if (activity != null && ad != null) {
+                                ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                                    override fun onAdDismissedFullScreenContent() {
+                                        interstitialAd = null
+                                        loadInterstitial()
+                                    }
                                 }
+                                ad.show(activity)
                             }
-                            ad.show(activity)
                         }
+                        scope.launch { uiState = loadJobs(context) }
                     }
-                    scope.launch { uiState = loadJobs(context) }
-                }
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Box(modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()) {
-                when (val state = uiState) {
-                    is UiState.Loading -> CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                    is UiState.Empty -> Text(
-                        text = "검색 결과가 없습니다",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                    is UiState.Success -> JobList(state.jobs)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when (val state = uiState) {
+                        is UiState.Loading -> CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                        is UiState.Empty -> Text(
+                            text = "검색 결과가 없습니다",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                        is UiState.Success -> JobList(
+                            infos = state.jobs,
+                            listLabel = "검색결과",
+                            favoritePref = favoritePref,
+                            onFavoriteChanged = ::onFavoriteChanged
+                        )
+                    }
                 }
             }
-            // 하단 배너 광고
+
+            if (selectedTab == 1) {
+                val favorites = remember(favoriteVersion) { favoritePref.getAll() }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    if (favorites.isEmpty()) {
+                        Text(
+                            text = "저장된 공고가 없습니다",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    } else {
+                        JobList(
+                            infos = favorites,
+                            listLabel = "저장된 공고",
+                            favoritePref = favoritePref,
+                            onFavoriteChanged = ::onFavoriteChanged
+                        )
+                    }
+                }
+            }
+
+            // 하단 배너 광고 (두 탭 공통)
             AndroidView(
                 factory = { ctx ->
                     AdView(ctx).apply {
@@ -328,36 +393,24 @@ fun FilterRow(onFilterChanged: () -> Unit) {
         "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구",
         "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"
     )
-    val educations = listOf("학력무관", "초졸이하", "중졸", "고졸", "대졸(2~3년)", "대졸(4년)", "석사", "박사")
-    val styles = listOf("정규직", "계약직", "시간제", "파견직")
-    val careers = listOf("관계없음", "신입", "경력")
 
-    Row(
-        modifier = Modifier
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
+    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
         FilterDropdown("근무지", locations, pref.getLocation()) { v ->
             pref.saveLocation(v); onFilterChanged()
-        }
-        FilterDropdown("학력", educations, pref.getEducation()) { v ->
-            pref.saveEducation(v); onFilterChanged()
-        }
-        FilterDropdown("고용형태", styles, pref.getStyle()) { v ->
-            pref.saveStyle(v); onFilterChanged()
-        }
-        FilterDropdown("경력", careers, pref.getCareer()) { v ->
-            pref.saveCareer(v); onFilterChanged()
         }
     }
 }
 
 @Composable
-fun JobList(infos: List<JobInfo>) {
+fun JobList(
+    infos: List<JobInfo>,
+    listLabel: String = "검색결과",
+    favoritePref: FavoritePref,
+    onFavoriteChanged: (added: Boolean) -> Unit
+) {
     Column {
         Text(
-            text = "검색결과 : ${infos.size}개",
+            text = "$listLabel : ${infos.size}개",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
@@ -367,7 +420,11 @@ fun JobList(infos: List<JobInfo>) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(infos) { info ->
-                ExpandableCardView(info)
+                ExpandableCardView(
+                    job = info,
+                    favoritePref = favoritePref,
+                    onFavoriteChanged = onFavoriteChanged
+                )
             }
         }
     }
@@ -455,8 +512,13 @@ fun longItemText(job: JobInfo): String {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ExpandableCardView(job: JobInfo) {
+fun ExpandableCardView(
+    job: JobInfo,
+    favoritePref: FavoritePref,
+    onFavoriteChanged: (added: Boolean) -> Unit
+) {
     var isExpanded by remember { mutableStateOf(false) }
+    var isFavorite by remember { mutableStateOf(favoritePref.isFavorite(job.joReqstNo ?: "")) }
     val context = LocalContext.current
 
     Card(
@@ -479,6 +541,22 @@ fun ExpandableCardView(job: JobInfo) {
                 )
                 .padding(16.dp)
         ) {
+            IconButton(
+                onClick = {
+                    val nowFavorite = !isFavorite
+                    if (nowFavorite) favoritePref.add(job) else favoritePref.remove(job.joReqstNo ?: "")
+                    isFavorite = nowFavorite
+                    onFavoriteChanged(nowFavorite)
+                },
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = if (isFavorite) "즐겨찾기 해제" else "즐겨찾기 추가",
+                    tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.outline
+                )
+            }
             if (isExpanded) LongItem(job) else ShortItem(job)
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(
