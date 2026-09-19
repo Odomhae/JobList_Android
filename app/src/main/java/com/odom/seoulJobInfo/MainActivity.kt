@@ -25,8 +25,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -37,7 +37,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.ripple
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,6 +57,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -86,10 +86,15 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.odom.seoulJobInfo.ui.theme.JobInfoTheme
 import kotlinx.coroutines.launch
@@ -240,6 +245,10 @@ fun JobContent() {
     var showSettings by remember { mutableStateOf(false) }
     var selectedRegions by remember { mutableStateOf(settingsPref.getSelectedRegions()) }
 
+    // 전면(전체) 광고: 지역 드롭다운 선택을 3번 바꿀 때마다 노출
+    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+    var regionChangeCount by remember { mutableStateOf(settingsPref.getRegionAdCount()) }
+
     // 무한 스크롤 상태
     val scope = rememberCoroutineScope()
     val service = remember { MainActivity.RetrofitClient.create() }
@@ -268,6 +277,23 @@ fun JobContent() {
         }
     }
 
+    fun loadInterstitial() {
+        InterstitialAd.load(
+            context,
+            context.getString(R.string.TEST_Admob_FULLSCREEN_ID).trim(),
+            AdRequest.Builder().build(),
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    interstitialAd = ad
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    interstitialAd = null
+                }
+            }
+        )
+    }
+
     fun triggerInAppReview() {
         val activity = context as? Activity ?: return
         val reviewManager = ReviewManagerFactory.create(context)
@@ -287,6 +313,7 @@ fun JobContent() {
     }
 
     LaunchedEffect(Unit) {
+        loadInterstitial()
         loadMore()
         isInitialLoading = false
     }
@@ -334,8 +361,32 @@ fun JobContent() {
 
             if (selectedTab == 0) {
                 val onRegionChange: (Set<String>) -> Unit = { newSelection ->
+                    // 체크(추가)로 코드 수가 늘어난 경우만 카운트. 해제/전체는 제외.
+                    val isCheck = newSelection.size > selectedRegions.size
                     selectedRegions = newSelection
                     settingsPref.saveSelectedRegions(newSelection)
+
+                    // 체크를 3번 할 때마다 전면 광고 노출 (카운트는 저장되어 재실행 후에도 유지)
+                    val activity = context as? Activity
+                    val ad = interstitialAd
+                    if (isCheck) {
+                        regionChangeCount++
+                        settingsPref.saveRegionAdCount(regionChangeCount)
+                    }
+                    if (isCheck && regionChangeCount % 3 == 0 && activity != null && ad != null) {
+                        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                            override fun onAdDismissedFullScreenContent() {
+                                interstitialAd = null
+                                loadInterstitial() // 다음 광고 미리 로드
+                            }
+
+                            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                                interstitialAd = null
+                                loadInterstitial()
+                            }
+                        }
+                        ad.show(activity)
+                    }
                 }
                 Row(
                     modifier = Modifier

@@ -21,4 +21,12 @@ class SettingsPref(context: Context) {
     fun getSelectedRegions(): Set<String> {
         return prefs.getStringSet("selectedRegions", emptySet()) ?: emptySet()
     }
+
+    fun saveRegionAdCount(count: Int) {
+        prefs.edit().putInt("regionAdCount", count).apply()
+    }
+
+    fun getRegionAdCount(): Int {
+        return prefs.getInt("regionAdCount", 0)
+    }
 }
