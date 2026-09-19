@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -36,7 +37,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -83,6 +84,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -109,6 +111,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // targetSdk 36(Android 16)은 edge-to-edge가 강제되고 opt-out이 불가하므로,
+        // 콘텐츠가 시스템 바 아래로 그려지도록 하고 Compose에서 인셋 패딩을 적용한다.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         MobileAds.initialize(this)
         setContent {
             JobInfoTheme {
@@ -311,6 +316,8 @@ fun JobContent() {
     CompositionLocalProvider(LocalTextScale provides textScale) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // TopAppBar가 자체 windowInsets로 상태 바 뒤까지 primary 색을 채운다
+            // (→ 흰색 시스템 아이콘이 보임). 하단 내비게이션 바는 배너에서 따로 처리.
             Toolbar(onSettingsClick = { showSettings = true })
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
@@ -438,7 +445,7 @@ fun JobContent() {
                         loadAd(AdRequest.Builder().build())
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding()
             )
         }
     }
@@ -567,8 +574,8 @@ fun SettingsSheet(
 @Composable
 fun Toolbar(onSettingsClick: () -> Unit) {
     TopAppBar(
-        title = { Text(text = "서울 일자리") },
-        colors = TopAppBarDefaults.smallTopAppBarColors(
+        title = { Text(text = "수도권 일자리") },
+        colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.primary,
             titleContentColor = MaterialTheme.colorScheme.onPrimary
         ),
@@ -833,7 +840,7 @@ fun ExpandableCardView(
                 .fillMaxWidth()
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = rememberRipple(bounded = true),
+                    indication = ripple(bounded = true),
                     onClick = { isExpanded = !isExpanded },
                     onLongClick = { copyToClipboard(context, isExpanded, job) }
                 )
