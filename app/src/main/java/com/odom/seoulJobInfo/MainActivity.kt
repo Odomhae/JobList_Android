@@ -1,7 +1,6 @@
 package com.odom.seoulJobInfo
 
 import FavoritePref
-import SearchPref
 import SettingsPref
 import android.app.Activity
 import android.content.ClipData
@@ -14,6 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -27,16 +27,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,6 +49,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -53,41 +58,36 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Slider
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.FullScreenContentCallback
-import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.odom.seoulJobInfo.ui.theme.JobInfoTheme
 import kotlinx.coroutines.launch
@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
     object RetrofitClient {
         fun create(): ApiService {
             val retrofit = Retrofit.Builder()
-                .baseUrl("http://openapi.seoul.go.kr:8088/${BuildConfig.API_KEY}/json/GetJobInfo/")
+                .baseUrl("http://openapi.seoul.go.kr:8088/${BuildConfig.API_KEY}/json/recMntList/")
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
             return retrofit.create(ApiService::class.java)
@@ -120,39 +120,140 @@ class MainActivity : ComponentActivity() {
 
 val LocalTextScale = compositionLocalOf { 1.0f }
 
-sealed interface UiState {
-    object Loading : UiState
-    object Empty : UiState
-    data class Success(val jobs: List<JobInfo>) : UiState
-}
+// 지역 필터 단위. 하나의 시/구가 실제 데이터에 등장하는 REGION_CD를 모두 담는다.
+// (구가 있는 시는 데이터가 구 단위 코드로 오므로 시 코드 + 구 코드를 함께 포함)
+data class Region(val name: String, val codes: List<String>)
 
-suspend fun loadJobs(context: Context): UiState {
+private fun region(name: String, vararg codes: String) = Region(name, codes.toList())
+
+fun Region.isSelectedIn(selected: Set<String>): Boolean = codes.any { it in selected }
+
+fun Region.toggleIn(selected: Set<String>): Set<String> =
+    if (isSelectedIn(selected)) selected - codes.toSet() else selected + codes
+
+// 서울시 25개 자치구
+val SEOUL_REGIONS: List<Region> = listOf(
+    region("종로구", "11110"),
+    region("중구", "11140"),
+    region("용산구", "11170"),
+    region("성동구", "11200"),
+    region("광진구", "11215"),
+    region("동대문구", "11230"),
+    region("중랑구", "11260"),
+    region("성북구", "11290"),
+    region("강북구", "11305"),
+    region("도봉구", "11320"),
+    region("노원구", "11350"),
+    region("은평구", "11380"),
+    region("서대문구", "11410"),
+    region("마포구", "11440"),
+    region("양천구", "11470"),
+    region("강서구", "11500"),
+    region("구로구", "11530"),
+    region("금천구", "11545"),
+    region("영등포구", "11560"),
+    region("동작구", "11590"),
+    region("관악구", "11620"),
+    region("서초구", "11650"),
+    region("강남구", "11680"),
+    region("송파구", "11710"),
+    region("강동구", "11740")
+)
+
+// 경기도 (구가 있는 시는 시 코드 + 구 코드를 모두 포함)
+val GYEONGGI_REGIONS: List<Region> = listOf(
+    region("수원시", "41110", "41111", "41113", "41115", "41117"),
+    region("성남시", "41130", "41131", "41133", "41135"),
+    region("의정부시", "41150"),
+    region("안양시", "41170", "41171", "41173"),
+    region("부천시", "41190", "41192", "41194", "41196"),
+    region("광명시", "41210"),
+    region("평택시", "41220"),
+    region("동두천시", "41250"),
+    region("안산시", "41270", "41271", "41273"),
+    region("고양시", "41280", "41281", "41285", "41287"),
+    region("과천시", "41290"),
+    region("구리시", "41310"),
+    region("남양주시", "41360"),
+    region("오산시", "41370"),
+    region("시흥시", "41390"),
+    region("군포시", "41410"),
+    region("의왕시", "41430"),
+    region("하남시", "41450"),
+    region("용인시", "41460", "41461", "41463", "41465"),
+    region("파주시", "41480"),
+    region("이천시", "41500"),
+    region("안성시", "41550"),
+    region("김포시", "41570"),
+    region("화성시", "41590", "41591", "41593", "41595", "41597"),
+    region("광주시", "41610"),
+    region("양주시", "41630"),
+    region("포천시", "41650"),
+    region("여주시", "41670"),
+    region("연천군", "41800"),
+    region("가평군", "41820"),
+    region("양평군", "41830")
+)
+
+// 인천광역시
+val INCHEON_REGIONS: List<Region> = listOf(
+    region("제물포구", "28125"),
+    region("영종구", "28155"),
+    region("미추홀구", "28177"),
+    region("연수구", "28185"),
+    region("남동구", "28200"),
+    region("부평구", "28237"),
+    region("계양구", "28245"),
+    region("서해구", "28275"),
+    region("검단구", "28290"),
+    region("강화군", "28710"),
+    region("옹진군", "28720")
+)
+
+const val PAGE_SIZE = 1000
+
+// recMntList는 요청당 최대 1,000행 + 서버 필터가 없어, 페이지를 나눠 순차로 받는다(무한 스크롤).
+// 지역 필터는 받아온 목록에 client-side로 적용한다.
+suspend fun fetchJobPage(service: ApiService, start: Int): List<JobInfo> {
     return try {
-        val pref = SearchPref(context)
-        val jobs = MainActivity.RetrofitClient.create()
-            .getCustomResult(pref.getEducation(), pref.getStyle(), pref.getLocation(), pref.getCareer())
-            .getJobInfo?.row.orEmpty()
-        if (jobs.isEmpty()) UiState.Empty else UiState.Success(jobs)
+        service.getResult(start, start + PAGE_SIZE - 1).recMntList?.row.orEmpty()
     } catch (_: Exception) {
-        UiState.Empty
+        emptyList()
     }
 }
 
 @Composable
 fun JobContent() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
-    var uiState by remember { mutableStateOf<UiState>(UiState.Loading) }
     var showExitDialog by remember { mutableStateOf(false) }
-    var filterChangeCount by remember { mutableStateOf(0) }
-    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
     var favoriteVersion by remember { mutableStateOf(0) }
     val favoritePref = remember { FavoritePref(context) }
     val settingsPref = remember { SettingsPref(context) }
     var textScale by remember { mutableStateOf(settingsPref.getTextScale()) }
     var showSettings by remember { mutableStateOf(false) }
+    var selectedRegions by remember { mutableStateOf(settingsPref.getSelectedRegions()) }
+
+    // 무한 스크롤 상태
+    val scope = rememberCoroutineScope()
+    val service = remember { MainActivity.RetrofitClient.create() }
+    val jobs = remember { mutableStateListOf<JobInfo>() }
+    var isInitialLoading by remember { mutableStateOf(true) }
+    var isLoadingMore by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(true) }
+    var nextStart by remember { mutableStateOf(1) }
+
+    suspend fun loadMore() {
+        if (isLoadingMore || !hasMore) return
+        isLoadingMore = true
+        val start = nextStart
+        val page = fetchJobPage(service, start)
+        jobs.addAll(page)
+        nextStart = start + PAGE_SIZE
+        hasMore = page.size == PAGE_SIZE
+        isLoadingMore = false
+    }
 
     val exitBannerAdView = remember {
         AdView(context).apply {
@@ -160,18 +261,6 @@ fun JobContent() {
             adUnitId = context.getString(R.string.TEST_Admob_BANNER_ID).trim()
             loadAd(AdRequest.Builder().build())
         }
-    }
-
-    fun loadInterstitial() {
-        InterstitialAd.load(
-            context,
-            context.getString(R.string.TEST_Admob_FULLSCREEN_ID).trim(),
-            AdRequest.Builder().build(),
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) { interstitialAd = ad }
-                override fun onAdFailedToLoad(error: LoadAdError) { interstitialAd = null }
-            }
-        )
     }
 
     fun triggerInAppReview() {
@@ -193,8 +282,8 @@ fun JobContent() {
     }
 
     LaunchedEffect(Unit) {
-        uiState = loadJobs(context)
-        loadInterstitial()
+        loadMore()
+        isInitialLoading = false
     }
 
     BackHandler { showExitDialog = true }
@@ -237,49 +326,83 @@ fun JobContent() {
             }
 
             if (selectedTab == 0) {
+                val onRegionChange: (Set<String>) -> Unit = { newSelection ->
+                    selectedRegions = newSelection
+                    settingsPref.saveSelectedRegions(newSelection)
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    RegionFilterDropdown(
+                        title = "서울",
+                        regions = SEOUL_REGIONS,
+                        selected = selectedRegions,
+                        onSelectionChange = onRegionChange,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RegionFilterDropdown(
+                        title = "경기",
+                        regions = GYEONGGI_REGIONS,
+                        selected = selectedRegions,
+                        onSelectionChange = onRegionChange,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RegionFilterDropdown(
+                        title = "인천",
+                        regions = INCHEON_REGIONS,
+                        selected = selectedRegions,
+                        onSelectionChange = onRegionChange,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 Text(
                     text = "글자를 길게 누르면 복사가 됩니다",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
                 )
-                FilterRow(
-                    onFilterChanged = {
-                        uiState = UiState.Loading
-                        filterChangeCount++
-                        if (filterChangeCount % 3 == 0) {
-                            val activity = context as? Activity
-                            val ad = interstitialAd
-                            if (activity != null && ad != null) {
-                                ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                                    override fun onAdDismissedFullScreenContent() {
-                                        interstitialAd = null
-                                        loadInterstitial()
-                                    }
-                                }
-                                ad.show(activity)
-                            }
-                        }
-                        scope.launch { uiState = loadJobs(context) }
-                    }
-                )
                 Spacer(modifier = Modifier.height(8.dp))
+
+                val filteredJobs = if (selectedRegions.isEmpty()) {
+                    jobs.toList()
+                } else {
+                    jobs.filter { it.regionCd in selectedRegions }
+                }
+                val listState = rememberLazyListState()
+
+                // 필터 결과가 아직 없고 더 받을 페이지가 남았으면 계속 불러온다
+                // (희소한 지역만 선택했을 때 자동으로 다음 페이지를 끌어온다)
+                LaunchedEffect(filteredJobs.isEmpty(), hasMore, isLoadingMore, selectedRegions) {
+                    if (filteredJobs.isEmpty() && hasMore && !isLoadingMore) {
+                        loadMore()
+                    }
+                }
+
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    when (val state = uiState) {
-                        is UiState.Loading -> CircularProgressIndicator(
+                    when {
+                        isInitialLoading -> CircularProgressIndicator(
                             modifier = Modifier.align(Alignment.Center)
                         )
-                        is UiState.Empty -> Text(
-                            text = "검색 결과가 없습니다",
+                        filteredJobs.isEmpty() && !hasMore -> Text(
+                            text = "선택한 지역의 공고가 없습니다",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.Center)
                         )
-                        is UiState.Success -> JobList(
-                            infos = state.jobs,
+                        filteredJobs.isEmpty() -> CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                        else -> JobList(
+                            infos = filteredJobs,
                             listLabel = "검색결과",
                             favoritePref = favoritePref,
-                            onFavoriteChanged = ::onFavoriteChanged
+                            onFavoriteChanged = ::onFavoriteChanged,
+                            listState = listState,
+                            isLoadingMore = isLoadingMore,
+                            onLoadMore = { scope.launch { loadMore() } }
                         )
                     }
                 }
@@ -462,60 +585,53 @@ fun Toolbar(onSettingsClick: () -> Unit) {
 }
 
 @Composable
-fun FilterDropdown(
-    placeholder: String,
-    options: List<String>,
-    savedValue: String,
-    onSelected: (String) -> Unit
+fun RegionFilterDropdown(
+    title: String,
+    regions: List<Region>,
+    selected: Set<String>,
+    onSelectionChange: (Set<String>) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var label by remember { mutableStateOf(if (savedValue != "%20") savedValue else placeholder) }
+    val selectedCount = regions.count { it.isSelectedIn(selected) }
+    val label = if (selectedCount == 0) title else "$title ($selectedCount)"
+    val allCodes = regions.flatMap { it.codes }.toSet()
 
-    Box {
-        OutlinedButton(onClick = { expanded = true }) {
+    Box(modifier = modifier) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text(text = label)
-            Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null)
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = "$title 지역 선택"
+            )
         }
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
             DropdownMenuItem(
-                text = { Text("전체") },
-                onClick = {
-                    label = placeholder
-                    expanded = false
-                    onSelected("%20")
+                text = { Text("$title 전체") },
+                onClick = { onSelectionChange(selected - allCodes) },
+                leadingIcon = {
+                    Checkbox(checked = selectedCount == 0, onCheckedChange = null)
                 }
             )
-            options.forEach { item ->
+            regions.forEach { region ->
                 DropdownMenuItem(
-                    text = { Text(item) },
-                    onClick = {
-                        label = item
-                        expanded = false
-                        onSelected(item)
+                    text = { Text(region.name) },
+                    onClick = { onSelectionChange(region.toggleIn(selected)) },
+                    leadingIcon = {
+                        Checkbox(
+                            checked = region.isSelectedIn(selected),
+                            onCheckedChange = null
+                        )
                     }
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun FilterRow(onFilterChanged: () -> Unit) {
-    val context = LocalContext.current
-    val pref = remember { SearchPref(context) }
-
-    val locations = listOf(
-        "강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구",
-        "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구",
-        "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"
-    )
-
-    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-        FilterDropdown("근무지", locations, pref.getLocation()) { v ->
-            pref.saveLocation(v); onFilterChanged()
         }
     }
 }
@@ -525,8 +641,26 @@ fun JobList(
     infos: List<JobInfo>,
     listLabel: String = "검색결과",
     favoritePref: FavoritePref,
-    onFavoriteChanged: (added: Boolean) -> Unit
+    onFavoriteChanged: (added: Boolean) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+    isLoadingMore: Boolean = false,
+    onLoadMore: (() -> Unit)? = null
 ) {
+    // 리스트 끝에 가까워지면 다음 페이지를 불러온다
+    if (onLoadMore != null) {
+        LaunchedEffect(listState) {
+            snapshotFlow {
+                val layout = listState.layoutInfo
+                val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+                lastVisible to layout.totalItemsCount
+            }.collect { (lastVisible, total) ->
+                if (total > 0 && lastVisible >= total - 3) {
+                    onLoadMore()
+                }
+            }
+        }
+    }
+
     Column {
         Text(
             text = "$listLabel : ${infos.size}개",
@@ -535,6 +669,7 @@ fun JobList(
             modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp)
         )
         LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -544,6 +679,18 @@ fun JobList(
                     favoritePref = favoritePref,
                     onFavoriteChanged = onFavoriteChanged
                 )
+            }
+            if (isLoadingMore) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
             }
         }
     }
@@ -561,12 +708,12 @@ fun ShortItem(job: JobInfo) {
             withStyle(labelStyle) { append("$label: ") }
             withStyle(valueStyle) { append("${value ?: ""}$trailing") }
         }
-        field("기업명칭", job.cmpnyNm)
-        field("사업요약", job.bsnsSumryCn)
-        field("모집요강", job.guiLn, "\n\n")
-        field("근무시간", job.workTimeNm)
-        field("공휴일", job.holidayNm, "\n\n")
-        field("마감일", job.rceptClosNm)
+        field("기업명", job.company)
+        field("채용제목", job.title, "\n\n")
+        field("근무지역", job.region)
+        field("고용형태", job.empTpNm)
+        field("임금조건", job.salTpNm, "\n\n")
+        field("마감일", job.closeDt)
     }
     Text(text = text, style = MaterialTheme.typography.bodyMedium)
 }
@@ -583,55 +730,81 @@ fun LongItem(job: JobInfo) {
             withStyle(labelStyle) { append("$label: ") }
             withStyle(valueStyle) { append("${value ?: ""}$trailing") }
         }
-        field("기업명칭", job.cmpnyNm)
-        field("사업요약", job.bsnsSumryCn)
-        field("모집요강", job.guiLn, "\n\n")
-        field("근무시간", job.workTimeNm)
-        field("공휴일", job.holidayNm, "\n\n")
-        field("마감일", job.rceptClosNm, "\n\n")
-        field("구인제목", job.joSj)
-        field("근무예정지", job.workPararBassAdresCn)
-        field("직무내용", job.dtyCn, "\n\n")
-        field("급여조건", job.hopeWage, "\n\n")
-        field("담당 상담사명", job.mngrNm)
-        field("담당 상담사 전화번호", job.mngrPhonNo)
-        field("담당 상담사 소속기관명", job.mngrInsttNm, "\n\n")
-        field("기업 주소", job.bassAdresCn)
-        field("구인신청번호", job.joReqstNo)
-        field("구인등록번호", job.joRegistNo)
+        field("기업명", job.company)
+        field("채용제목", job.title, "\n\n")
+        field("근무지역", job.region)
+        field("근무예정지", job.workRegion)
+        field("경력", job.career)
+        field("학력", listOfNotNull(job.minEdubg, job.maxEdubg).filter { it.isNotBlank() }.distinct().joinToString(" ~ "), "\n\n")
+        field("업종", job.indTpCdNm)
+        field("모집직종", job.jobsNm)
+        field("모집인원", job.collectPsncnt)
+        field("직무내용", job.jobCont, "\n\n")
+        field("고용형태", job.empTpNm)
+        field("근무시간/형태", job.workdayWorkhrCont)
+        field("임금조건", job.salTpNm, "\n\n")
+        field("전공", job.major)
+        field("자격면허", job.certificate)
+        field("병역특례채용희망", job.mltsvcExcHope)
+        field("컴퓨터활용능력", job.compAbl)
+        field("우대조건", job.pfCond, "\n\n")
+        field("전형방법", job.selMthd)
+        field("접수방법", job.rcptMthd)
+        field("제출서류", job.submitDoc, "\n\n")
+        field("4대보험", job.fourIns)
+        field("퇴직금", job.retirepay)
+        field("기타복리후생", job.etcWelfare, "\n\n")
+        field("회사주소", job.corpAddr)
+        field("채용부서", job.empChargerDpt)
+        field("전화번호", job.contactTelno)
+        field("등록일", job.regDt)
+        field("마감일", job.closeDt)
     }
     Text(text = text, style = MaterialTheme.typography.bodyMedium)
 }
 
 fun shortItemText(job: JobInfo): String {
     val sb = StringBuilder()
-    sb.append("기업명칭: ${job.cmpnyNm}\n")
-    sb.append("사업요약내용: ${job.bsnsSumryCn}\n")
-    sb.append("모집요강: ${job.guiLn}\n\n")
-    sb.append("근무시간: ${job.workTimeNm}\n")
-    sb.append("공휴일: ${job.holidayNm}\n\n")
-    sb.append("마감일: ${job.rceptClosNm}\n")
+    sb.append("기업명: ${job.company}\n")
+    sb.append("채용제목: ${job.title}\n\n")
+    sb.append("근무지역: ${job.region}\n")
+    sb.append("고용형태: ${job.empTpNm}\n")
+    sb.append("임금조건: ${job.salTpNm}\n\n")
+    sb.append("마감일: ${job.closeDt}\n")
     return sb.toString()
 }
 
 fun longItemText(job: JobInfo): String {
     val sb = StringBuilder()
-    sb.append("기업명칭: ${job.cmpnyNm}\n")
-    sb.append("사업요약내용: ${job.bsnsSumryCn}\n")
-    sb.append("모집요강: ${job.guiLn}\n\n")
-    sb.append("근무시간: ${job.workTimeNm}\n")
-    sb.append("공휴일: ${job.holidayNm}\n\n")
-    sb.append("마감일: ${job.rceptClosNm}\n")
-    sb.append("구인제목: ${job.joSj}\n")
-    sb.append("근무예정지: ${job.workPararBassAdresCn}\n")
-    sb.append("직무내용: ${job.dtyCn}\n\n")
-    sb.append("급여조건: ${job.hopeWage}\n")
-    sb.append("담당 상담사명: ${job.mngrNm}\n")
-    sb.append("담당 상담사 전화번호: ${job.mngrPhonNo}\n")
-    sb.append("담당 상담사 소속기관명: ${job.mngrInsttNm}\n\n")
-    sb.append("기업 주소: ${job.bassAdresCn}\n")
-    sb.append("구인신청번호: ${job.joReqstNo}\n")
-    sb.append("구인등록번호: ${job.joRegistNo}\n")
+    sb.append("기업명: ${job.company}\n")
+    sb.append("채용제목: ${job.title}\n\n")
+    sb.append("근무지역: ${job.region}\n")
+    sb.append("근무예정지: ${job.workRegion}\n")
+    sb.append("경력: ${job.career}\n")
+    sb.append("학력: ${job.minEdubg} ~ ${job.maxEdubg}\n\n")
+    sb.append("업종: ${job.indTpCdNm}\n")
+    sb.append("모집직종: ${job.jobsNm}\n")
+    sb.append("모집인원: ${job.collectPsncnt}\n")
+    sb.append("직무내용: ${job.jobCont}\n\n")
+    sb.append("고용형태: ${job.empTpNm}\n")
+    sb.append("근무시간/형태: ${job.workdayWorkhrCont}\n")
+    sb.append("임금조건: ${job.salTpNm}\n\n")
+    sb.append("전공: ${job.major}\n")
+    sb.append("자격면허: ${job.certificate}\n")
+    sb.append("병역특례채용희망: ${job.mltsvcExcHope}\n")
+    sb.append("컴퓨터활용능력: ${job.compAbl}\n")
+    sb.append("우대조건: ${job.pfCond}\n\n")
+    sb.append("전형방법: ${job.selMthd}\n")
+    sb.append("접수방법: ${job.rcptMthd}\n")
+    sb.append("제출서류: ${job.submitDoc}\n\n")
+    sb.append("4대보험: ${job.fourIns}\n")
+    sb.append("퇴직금: ${job.retirepay}\n")
+    sb.append("기타복리후생: ${job.etcWelfare}\n\n")
+    sb.append("회사주소: ${job.corpAddr}\n")
+    sb.append("채용부서: ${job.empChargerDpt}\n")
+    sb.append("전화번호: ${job.contactTelno}\n")
+    sb.append("등록일: ${job.regDt}\n")
+    sb.append("마감일: ${job.closeDt}\n")
     return sb.toString()
 }
 
@@ -643,7 +816,7 @@ fun ExpandableCardView(
     onFavoriteChanged: (added: Boolean) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
-    var isFavorite by remember { mutableStateOf(favoritePref.isFavorite(job.joReqstNo ?: "")) }
+    var isFavorite by remember { mutableStateOf(favoritePref.isFavorite(job.favoriteKey)) }
     val context = LocalContext.current
 
     Card(
@@ -669,7 +842,7 @@ fun ExpandableCardView(
             IconButton(
                 onClick = {
                     val nowFavorite = !isFavorite
-                    if (nowFavorite) favoritePref.add(job) else favoritePref.remove(job.joReqstNo ?: "")
+                    if (nowFavorite) favoritePref.add(job) else favoritePref.remove(job.favoriteKey)
                     isFavorite = nowFavorite
                     onFavoriteChanged(nowFavorite)
                 },

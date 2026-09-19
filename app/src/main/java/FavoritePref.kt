@@ -10,21 +10,21 @@ class FavoritePref(context: Context) {
     private val gson = Gson()
 
     fun add(job: JobInfo) {
-        val id = job.joReqstNo ?: return
+        val key = job.favoriteKey
         val current = loadRawSet().toMutableSet()
-        current.removeAll { gson.fromJson(it, JobInfo::class.java).joReqstNo == id }
+        current.removeAll { gson.fromJson(it, JobInfo::class.java).favoriteKey == key }
         current.add(gson.toJson(job))
         prefs.edit().putStringSet("favorites", current).apply()
     }
 
-    fun remove(joReqstNo: String) {
+    fun remove(favoriteKey: String) {
         val current = loadRawSet().toMutableSet()
-        current.removeAll { gson.fromJson(it, JobInfo::class.java).joReqstNo == joReqstNo }
+        current.removeAll { gson.fromJson(it, JobInfo::class.java).favoriteKey == favoriteKey }
         prefs.edit().putStringSet("favorites", current).apply()
     }
 
-    fun isFavorite(joReqstNo: String): Boolean =
-        loadRawSet().any { gson.fromJson(it, JobInfo::class.java).joReqstNo == joReqstNo }
+    fun isFavorite(favoriteKey: String): Boolean =
+        loadRawSet().any { gson.fromJson(it, JobInfo::class.java).favoriteKey == favoriteKey }
 
     fun getAll(): List<JobInfo> =
         loadRawSet().mapNotNull { runCatching { gson.fromJson(it, JobInfo::class.java) }.getOrNull() }

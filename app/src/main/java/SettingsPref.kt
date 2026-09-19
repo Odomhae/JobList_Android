@@ -13,4 +13,12 @@ class SettingsPref(context: Context) {
     fun getTextScale(): Float {
         return prefs.getFloat("textScale", 1.0f)
     }
+
+    fun saveSelectedRegions(codes: Set<String>) {
+        prefs.edit().putStringSet("selectedRegions", codes).apply()
+    }
+
+    fun getSelectedRegions(): Set<String> {
+        return prefs.getStringSet("selectedRegions", emptySet()) ?: emptySet()
+    }
 }

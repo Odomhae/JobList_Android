@@ -6,12 +6,12 @@ import com.google.gson.annotations.SerializedName
 
 class ApiResult {
 
-    @SerializedName("GetJobInfo")
+    @SerializedName("recMntList")
     @Expose
-    var getJobInfo: GetJobInfo? = null
+    var recMntList: RecMntList? = null
 }
 
-class GetJobInfo {
+class RecMntList {
     @SerializedName("list_total_count")
     @Expose
     var listTotalCount: Int = 0
@@ -36,143 +36,162 @@ class Result {
 }
 
 class JobInfo {
-    @SerializedName("JO_REQST_NO")
+    @SerializedName("COMPANY")
     @Expose
-    var joReqstNo: String? = null
+    var company: String? = null
 
-    @SerializedName("JO_REGIST_NO")
+    @SerializedName("TITLE")
     @Expose
-    var joRegistNo: String? = null
+    var title: String? = null
 
-    @SerializedName("CMPNY_NM")
+    @SerializedName("CAREER")
     @Expose
-    var cmpnyNm: String? = null
+    var career: String? = null
 
-    @SerializedName("BSNS_SUMRY_CN")
+    @SerializedName("REG_DT")
     @Expose
-    var bsnsSumryCn: String? = null
+    var regDt: String? = null
 
-    @SerializedName("RCRIT_JSSFC_CMMN_CODE_SE")
+    @SerializedName("CLOSE_DT")
     @Expose
-    var rcritJssfcCmmnCodeSe: String? = null
+    var closeDt: String? = null
 
-    @SerializedName("JOBCODE_NM")
+    @SerializedName("REGION")
     @Expose
-    var jobcodeNm: String? = null
+    var region: String? = null
 
-    @SerializedName("RCRIT_NMPR_CO")
+    @SerializedName("STRTNM_CD")
     @Expose
-    var rcritNmprCo: Double? = null
+    var strtnmCd: String? = null
 
-    @SerializedName("ACDMCR_CMMN_CODE_SE")
+    @SerializedName("MIN_EDUBG")
     @Expose
-    var acdmcrCmmnCodeSe: String? = null
+    var minEdubg: String? = null
 
-    @SerializedName("ACDMCR_NM")
+    @SerializedName("MAX_EDUBG")
     @Expose
-    var acdmcrNm: String? = null
+    var maxEdubg: String? = null
 
-    @SerializedName("EMPLYM_STLE_CMMN_CODE_SE")
+    @SerializedName("IND_TP_CD_NM")
     @Expose
-    var emplymStleCmmnCodeSe: String? = null
+    var indTpCdNm: String? = null
 
-    @SerializedName("EMPLYM_STLE_CMMN_MM")
+    @SerializedName("CORP_ADDR")
     @Expose
-    var emplymStleCmmnMm: String? = null
+    var corpAddr: String? = null
 
-    @SerializedName("WORK_PARAR_BASS_ADRES_CN")
+    @SerializedName("JOBS_NM")
     @Expose
-    var workPararBassAdresCn: String? = null
+    var jobsNm: String? = null
 
-    @SerializedName("SUBWAY_NM")
+    @SerializedName("JOB_CONT")
     @Expose
-    var subwayNm: String? = null
+    var jobCont: String? = null
 
-    @SerializedName("DTY_CN")
+    @SerializedName("EMP_TP_NM")
     @Expose
-    var dtyCn: String? = null
+    var empTpNm: String? = null
 
-    @SerializedName("CAREER_CND_CMMN_CODE_SE")
+    @SerializedName("COLLECT_PSNCNT")
     @Expose
-    var careerCndCmmnCodeSe: String? = null
+    var collectPsncnt: String? = null
 
-    @SerializedName("CAREER_CND_NM")
+    @SerializedName("SAL_TP_NM")
     @Expose
-    var careerCndNm: String? = null
+    var salTpNm: String? = null
 
-    @SerializedName("HOPE_WAGE")
+    @SerializedName("MAJOR")
     @Expose
-    var hopeWage: String? = null
+    var major: String? = null
 
-    @SerializedName("RET_GRANTS_NM")
+    @SerializedName("CERTIFICATE")
     @Expose
-    var retGrantsNm: String? = null
+    var certificate: String? = null
 
-    @SerializedName("WORK_TIME_NM")
+    @SerializedName("MLTSVC_EXC_HOPE")
     @Expose
-    var workTimeNm: String? = null
+    var mltsvcExcHope: String? = null
 
-    @SerializedName("WORK_TM_NM")
+    @SerializedName("COMP_ABL")
     @Expose
-    var workTmNm: String? = null
+    var compAbl: String? = null
 
-    @SerializedName("HOLIDAY_NM")
+    @SerializedName("PF_COND")
     @Expose
-    var holidayNm: String? = null
+    var pfCond: String? = null
 
-    @SerializedName("WEEK_WORK_HR")
+    @SerializedName("SEL_MTHD")
     @Expose
-    var weekWorkHr: String? = null
+    var selMthd: String? = null
 
-    @SerializedName("JO_FEINSR_SBSCRB_NM")
+    @SerializedName("RCPT_MTHD")
     @Expose
-    var joFeinsrSbscrbNm: String? = null
+    var rcptMthd: String? = null
 
-    @SerializedName("RCEPT_CLOS_NM")
+    @SerializedName("SUBMIT_DOC")
     @Expose
-    var rceptClosNm: String? = null
+    var submitDoc: String? = null
 
-    @SerializedName("RCEPT_MTH_IEM_NM")
+    @SerializedName("WORK_REGION")
     @Expose
-    var rceptMthIemNm: String? = null
+    var workRegion: String? = null
 
-    @SerializedName("MODEL_MTH_NM")
+    @SerializedName("WORKDAY_WORKHR_CONT")
     @Expose
-    var modelMthNm: String? = null
+    var workdayWorkhrCont: String? = null
 
-    @SerializedName("RCEPT_MTH_NM")
+    @SerializedName("FOUR_INS")
     @Expose
-    var rceptMthNm: String? = null
+    var fourIns: String? = null
 
-    @SerializedName("PRESENTN_PAPERS_NM")
+    @SerializedName("RETIREPAY")
     @Expose
-    var presentnPapersNm: String? = null
+    var retirepay: String? = null
 
-    @SerializedName("MNGR_NM")
+    @SerializedName("ETC_WELFARE")
     @Expose
-    var mngrNm: String? = null
+    var etcWelfare: String? = null
 
-    @SerializedName("MNGR_PHON_NO")
+    @SerializedName("JOBS_CD")
     @Expose
-    var mngrPhonNo: String? = null
+    var jobsCd: String? = null
 
-    @SerializedName("MNGR_INSTT_NM")
+    @SerializedName("MIN_EDUBG_ICD")
     @Expose
-    var mngrInsttNm: String? = null
+    var minEdubgIcd: String? = null
 
-    @SerializedName("BASS_ADRES_CN")
+    @SerializedName("MAX_EDUBG_ICD")
     @Expose
-    var bassAdresCn: String? = null
+    var maxEdubgIcd: String? = null
 
-    @SerializedName("JO_SJ")
+    @SerializedName("REGION_CD")
     @Expose
-    var joSj: String? = null
+    var regionCd: String? = null
 
-    @SerializedName("JO_REG_DT")
+    @SerializedName("EMP_TP_CD")
     @Expose
-    var joRegDt: String? = null
+    var empTpCd: String? = null
 
-    @SerializedName("GUI_LN")
+    @SerializedName("ENTER_TP_CD")
     @Expose
-    var guiLn: String? = null
+    var enterTpCd: String? = null
+
+    @SerializedName("SAL_TP_CD")
+    @Expose
+    var salTpCd: String? = null
+
+    @SerializedName("EMP_CHARGER_DPT")
+    @Expose
+    var empChargerDpt: String? = null
+
+    @SerializedName("CONTACT_TELNO")
+    @Expose
+    var contactTelno: String? = null
+
+    /**
+     * The API no longer returns a unique posting ID (the old JO_REQST_NO is gone),
+     * so favorites are identified by a composite of the posting's stable fields.
+     */
+    val favoriteKey: String
+        get() = "${company.orEmpty()}|${title.orEmpty()}|${regDt.orEmpty()}|${closeDt.orEmpty()}"
 }
